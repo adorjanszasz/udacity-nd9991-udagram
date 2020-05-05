@@ -11,4 +11,4 @@ This needs to be done in an automated fashion so that the infrastructure can be 
 
 ## Architecture diagram
 
-In-work
+![](/Udagram Architecture.jpeg)
