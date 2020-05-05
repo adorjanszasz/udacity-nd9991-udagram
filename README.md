@@ -1,4 +1,5 @@
 # udacity-nd9991-udagram
+
 Udacity Cloud DevOps Engineer Nanodegree Program - IaC Project: High-availability web app
 
 ## Problem
@@ -11,4 +12,4 @@ This needs to be done in an automated fashion so that the infrastructure can be 
 
 ## Architecture diagram
 
-![](/Udagram Architecture.jpeg)
+![](/images/Udagram Architecture.jpeg)
