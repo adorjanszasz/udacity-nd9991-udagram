@@ -2,6 +2,8 @@
 
 Udacity Cloud DevOps Engineer Nanodegree Program - IaC Project: High-availability web app
 
+[Temporary test link](http://udagr-WebLo-1GJPOTK0R365-909540066.us-west-2.elb.amazonaws.com)
+
 ## Problem
 
 Your company is creating an Instagram clone called Udagram. Developers pushed the latest version of their code in a zip file located in a public S3 Bucket.
@@ -14,7 +16,7 @@ This needs to be done in an automated fashion so that the infrastructure can be 
 
 #### With bastion
 
-![](/images/Udagram Architecture.jpeg)
+![](/images/Udagram_Architecture.jpeg)
 
 #### Without bastion - implemented version
 
