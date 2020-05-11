@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Adorjan Szasz / Udacity 2020 - IaC project
+  Template for servers
+
+Parameters:
+  # whatever you consider a changing value, put it as a parameter instead of hard-coding it into your script
+
+  EnvironmentName:
+    Description: Environment name as prefix
+    Type: String
+
+  NumWebServerHosts:
+    Description: The initial number of WebServer instances
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 4
+
+  WebInstanceType:
+    Description: Amazon EC2 instance type
+    Type: String
+    Default: t2.micro
+
+Resources:
+  # Role for accessing the ec2 through security manager
+  EC2SSMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: ["ec2.amazonaws.com"]
+            Action: "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  # Instace profile contains the IAM Role name(s) that we want to associate to our auto scaling EC2 Servers
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref EC2SSMRole
+
+  # Security group
+  # web server load balancer
+  WebLBSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  # security group
+  # web servers
+  # restricting the data flow in/out
+  WebServerSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only
+      VpcId:
+        Fn::ImportValue: !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId:
+            !Select [0, !GetAtt WebLoadBalancer.SecurityGroups]
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+
+  #Load balancer for the web servers
+  WebLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PUB1-SN
+        - Fn::ImportValue: !Sub ${EnvironmentName}-PUB2-SN
+      SecurityGroups:
+        - Ref: WebLBSecGroup
+
+  # load balancer listener
+  # that is attached to the web server load balancer
+  # it forwards the traffic to the target group (currently set as default action)
+  WebLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: WebAppTargetGroup
+      LoadBalancerArn:
+        Ref: WebLoadBalancer
+      Port: "80"
+      Protocol: HTTP
+
+  # web server load balancer listener rule
+  # it is basically attached to the listener
+  # runs the health check - what
+  WebLBListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref "WebAppTargetGroup"
+      Conditions:
+        - Field: path-pattern
+          Values: [/]
+      ListenerArn: !Ref "WebLBListener"
+      Priority: 1
+
+  # target group
+  # controls the health check - how
+  # it says when to perform it, how many times, where
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${EnvironmentName}-VPCID"
+
+  # AutoScalingGroup for the web servers
+  # inside a VPC-zone, it handles the autoscaling
+  # for a specified launch configuration
+  # and assigning a target group to it
+  WebAppGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${EnvironmentName}-PRIV-NETS"
+      LaunchConfigurationName:
+        Ref: WebAppLaunchConfig
+      MinSize: "2"
+      MaxSize: "4"
+      DesiredCapacity: !Ref NumWebServerHosts
+      TargetGroupARNs:
+        - Ref: WebAppTargetGroup
+
+  # launch configuration for the web servers
+  # it sets up the EC2 instance with an apache server
+  # assigns a security group to it
+  # downloads the zip file containing the website
+  # places it unzipped in the www/html folder
+  WebAppLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          export DEBIAN_FRONTEND=noninteractive
+          sudo -E apt update -y
+          sudo -E apt install unzip awscli -y
+          sudo -E apt install apache2 -y
+          sudo systemctl start apache2.service
+          cd /var/www/html
+          aws s3 cp s3://udacity-demo-1/udacity.zip .
+          unzip -o udacity.zip
+      ImageId: ami-005bdb005fb00e791
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroups:
+        - Ref: WebServerSecGroup
+      InstanceType: !Ref WebInstanceType
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeSize: "10"
+
+Outputs:
+  # Bonus points for useful outputs!
+  WebAppURL:
+    Value: !Join ["", ["http://", !GetAtt WebLoadBalancer.DNSName]]
+    Description: Udagram Website
+    Export:
+      Name: !Sub ${EnvironmentName}-WEBURL

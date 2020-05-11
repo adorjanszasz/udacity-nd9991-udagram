@@ -1,22 +1,79 @@
 Description: >
   Adorjan Szasz / Udacity 2020 - IaC project
+
 Parameters:
-# whatever you consider a changing value, put it as a parameter instead of hard-coding it into your script
+  # whatever you consider a changing value, put it as a parameter instead of hard-coding it into your script
+
+  EnvironmentName:
+    Description: Environment name as prefix
+    Type: String
+
+  VpcCIDR:
+    Description: IP Range for the VPC
+    Type: String
+
+  PublicSubnet1CIDR:
+    Description: PublicSubnet 1 CIDR
+    Type: String
+
+  PublicSubnet2CIDR:
+    Description: PublicSubnet 2 CIDR
+    Type: String
+
+  PrivateSubnet1CIDR:
+    Description: PrivateSubnet 1 CIDR
+    Type: String
+
+  PrivateSubnet2CIDR:
+    Description: PrivateSubnet 2 CIDR
+    Type: String
+
+  WebInstanceType:
+    Description: Amazon EC2 instance type
+    Type: String
+    Default: t2.micro
+
+  NumWebServerHosts:
+    Description: The initial number of WebServer instances
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 4
+
 Resources:
-  #instace profile contains the IAM Role name(s) that we want to associate to our auto scaling EC2 Servers
-  ProfileWithRolesForOurApp:
-    Type: AWS::IAM::InstanceProfile
-    Properties: 
-      Roles:
-        - UdacityS3ReadOnlyEC2
-  
-          #!/bin/bash
-          apt-get update -y
-          apt-get install unzip awscli -y
-          apt-get install apache2 -y
-          systemctl start apache2.service
-          cd /var/www/html
-          aws s3 cp s3://udacity-demo-1/udacity.zip .
-          unzip -o udacity.zip
-  Outputs: 
-  #Bonus points for useful outputs!
+  #
+  # VPC stack
+  #
+
+  VPCStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Sub https://adorjanszasz-udacity.s3-us-west-2.amazonaws.com/vpc-base.template
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VpcCIDR: !Ref VpcCIDR
+        PrivateSubnet1CIDR: !Ref PrivateSubnet1CIDR
+        PrivateSubnet2CIDR: !Ref PrivateSubnet2CIDR
+        PublicSubnet1CIDR: !Ref PublicSubnet1CIDR
+        PublicSubnet2CIDR: !Ref PublicSubnet2CIDR
+
+  #
+  # Web server stack
+  #
+
+  WebServerStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn:
+      - VPCStack
+    Properties:
+      TemplateURL: !Sub https://adorjanszasz-udacity.s3-us-west-2.amazonaws.com/udagram-servers.template
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        NumWebServerHosts: !Ref NumWebServerHosts
+        WebInstanceType: !Ref WebInstanceType
+
+Outputs:
+  # Bonus points for useful outputs!
+  WebAppURL:
+    Value: !GetAtt WebServerStack.Outputs.WebAppURL
+    Description: Udagram Website
