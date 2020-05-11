@@ -25,7 +25,7 @@
   },
   {
     "ParameterKey": "WebInstanceType",
-    "ParameterValue": "t2.micro"
+    "ParameterValue": "t3.small"
   },
   {
     "ParameterKey": "NumWebServerHosts",
