@@ -14,7 +14,7 @@ This needs to be done in an automated fashion so that the infrastructure can be 
 
 #### With bastion
 
-![](/images/Udagram Architecture.jpeg)
+![](/images/Udagram_Architecture.jpeg)
 
 #### Without bastion - implemented version
 
